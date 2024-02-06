@@ -13,11 +13,11 @@
 "oauth2":
   "skipApprovalScreen": true
 "staticClients":
-- "id": "wge"
-  "name": "Weave Gitops Enterprise"
+- "id": "vault"
+  "name": "Vault"
   "redirectURIs":
-  - "https://wge.${local_dns}/oauth2/callback"
-  "secret": $WGE_DEX_CLIENT_SECRET
+  - "https://vault.${local_dns}/oauth2/callback"
+  "secret": $VAULT_DEX_CLIENT_SECRET
 "storage":
   "type": "memory"
 "web":
