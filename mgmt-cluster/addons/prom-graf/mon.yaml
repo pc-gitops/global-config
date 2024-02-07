@@ -24,6 +24,10 @@ spec:
     name: flux-monitoring
   timeout: 5m0s
   wait: true
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-config
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
