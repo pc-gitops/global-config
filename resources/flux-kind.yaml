@@ -52,6 +52,22 @@ spec:
 apiVersion: kustomize.toolkit.fluxcd.io/v1beta2
 kind: Kustomization
 metadata:
+  name: metrics-server
+  namespace: flux-system
+spec:
+  dependsOn:
+  - name: nginx
+  interval: 10m0s
+  path: ./mgmt-cluster/addons/metrics-server
+  prune: true
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: global-config
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1beta2
+kind: Kustomization
+metadata:
   name: reloader
   namespace: flux-system
 spec:
@@ -83,7 +99,7 @@ spec:
     name: global-config
   postBuild:
     substitute:
-      dnsSuffix: ${local_dns}
+      dnsSuffix: kubernetes.docker.internal
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1beta2
 kind: Kustomization
@@ -102,7 +118,7 @@ spec:
     name: global-config
   postBuild:
     substitute:
-      dnsSuffix: ${local_dns}
+      dnsSuffix: kubernetes.docker.internal
       storageClass: hostpath
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1beta2
@@ -139,7 +155,7 @@ spec:
     name: global-config
   postBuild:
     substitute:
-      dnsSuffix: ${local_dns}
+      dnsSuffix: kubernetes.docker.internal
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1beta2
 kind: Kustomization
@@ -182,21 +198,19 @@ spec:
 apiVersion: kustomize.toolkit.fluxcd.io/v1beta2
 kind: Kustomization
 metadata:
-  name: tf-controller
+  name: monitoring
   namespace: flux-system
 spec:
   interval: 10m0s
   dependsOn:
-    - name: secrets
-  path: ./mgmt-cluster/addons/tf-controller
+    - name: dex
+  path: ./mgmt-cluster/addons/monitoring/namespace
   prune: true
   wait: true
   sourceRef:
     kind: GitRepository
     name: global-config
   postBuild:
-    substitute:
-      dnsSuffix: ${local_dns}
     substituteFrom:
       - kind: ConfigMap
         name: cluster-config
@@ -204,13 +218,93 @@ spec:
 apiVersion: kustomize.toolkit.fluxcd.io/v1beta2
 kind: Kustomization
 metadata:
-  name: prom-graf
+  name: prometheus
   namespace: flux-system
 spec:
   interval: 10m0s
   dependsOn:
-    - name: secrets
-  path: ./mgmt-cluster/addons/prom-graf
+    - name: monitoring
+  path: ./mgmt-cluster/addons/monitoring/prometheus
+  prune: true
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: global-config
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-config
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1beta2
+kind: Kustomization
+metadata:
+  name: prom-alert
+  namespace: flux-system
+spec:
+  interval: 10m0s
+  dependsOn:
+    - name: prometheus
+  path: ./mgmt-cluster/addons/monitoring/prom-alert
+  prune: true
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: global-config
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-config
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1beta2
+kind: Kustomization
+metadata:
+  name: grafana
+  namespace: flux-system
+spec:
+  interval: 10m0s
+  dependsOn:
+    - name: prom-alert
+  path: ./mgmt-cluster/addons/monitoring/grafana
+  prune: true
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: global-config
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-config
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1beta2
+kind: Kustomization
+metadata:
+  name: loki
+  namespace: flux-system
+spec:
+  interval: 10m0s
+  dependsOn:
+    - name: grafana
+  path: ./mgmt-cluster/addons/monitoring/loki
+  prune: true
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: global-config
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-config
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1beta2
+kind: Kustomization
+metadata:
+  name: graf-agent
+  namespace: flux-system
+spec:
+  interval: 10m0s
+  dependsOn:
+    - name: loki
+  path: ./mgmt-cluster/addons/monitoring/graf-agent
   prune: true
   wait: true
   sourceRef:
@@ -229,7 +323,7 @@ metadata:
 spec:
   interval: 10m0s
   dependsOn:
-    - name: prom-graf
+    - name: dex
   path: ./mgmt-cluster/bases/flux
   prune: true
   wait: true
@@ -240,3 +334,4 @@ spec:
     substituteFrom:
       - kind: ConfigMap
         name: cluster-config
+
