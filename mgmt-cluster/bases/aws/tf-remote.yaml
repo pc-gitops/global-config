@@ -1,4 +1,21 @@
 ---
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: aws-creds
+  namespace: flux-system
+spec:
+  refreshInterval: 5m
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: vault
+  target:
+    name: aws-creds
+    creationPolicy: Owner
+  dataFrom:
+    - extract:
+        key: aws-creds
+---
 apiVersion: infra.contrib.fluxcd.io/v1alpha2
 kind: Terraform
 metadata:
