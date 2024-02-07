@@ -1,0 +1,49 @@
+---
+apiVersion: source.toolkit.fluxcd.io/v1beta2
+kind: HelmRepository
+metadata:
+  name: prometheus
+  namespace: monitoring
+spec:
+  interval: 1h0s
+  url: https://prometheus-community.github.io/helm-charts
+---
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: alertmanager
+  namespace: monitoring
+spec:
+  chart:
+    spec:
+      chart: alertmanager
+      version: 1.7.0
+      sourceRef:
+        kind: HelmRepository
+        name: prometheus
+  interval: 10m0s
+  install:
+    crds: CreateReplace
+    remediation:
+      retries: -1
+  upgrade:
+    crds: CreateReplace
+    remediation:
+      retries: -1
+  values:
+    ingress:
+      enabled: true
+      className: nginx
+      annotations:
+        kubernetes.io/ingress.class: nginx
+        cert-manager.io/cluster-issuer: local-ca-issuer
+        nginx.ingress.kubernetes.io/rewrite-target: /
+      hosts:
+        - host: alertmanager.${dnsSuffix}
+          paths:
+            - path: /?(.*)
+              pathType: ImplementationSpecific
+      tls:
+        - secretName: alertmanager-tls
+          hosts:
+            - alertmanager.${dnsSuffix}

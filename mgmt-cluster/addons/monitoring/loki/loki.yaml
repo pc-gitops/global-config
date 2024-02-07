@@ -1,0 +1,72 @@
+apiVersion: source.toolkit.fluxcd.io/v1beta2
+kind: HelmRepository
+metadata:
+  name: grafana
+  namespace: monitoring
+spec:
+  interval: 1h0s
+  url: https://grafana.github.io/helm-charts
+---
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: loki
+  namespace: monitoring
+spec:
+  chart:
+    spec:
+      chart: loki
+      version: 3.10.0
+      sourceRef:
+        kind: HelmRepository
+        name: grafana
+  interval: 10m0s
+  install:
+    crds: CreateReplace
+  upgrade:
+    crds: CreateReplace
+  values:
+    loki:
+      commonConfig:
+        replication_factor: 1
+      storage:
+        type: 'filesystem'
+        chunks_directory: /var/loki/chunks
+        rules_directory: /var/loki/rules
+      schema_config:
+        configs:
+          - from: 2020-10-24
+            store: boltdb-shipper
+            object_store: filesystem
+            schema: v11
+            index:
+              prefix: index_
+              period: 24h
+      chunk_store_config:
+        max_look_back_period: 48h
+      compactor:
+        working_directory: /var/loki/compactor
+        shared_store: filesystem
+        compaction_interval: 10m
+        retention_enabled: true
+        retention_delete_delay: 2h
+        retention_delete_worker_count: 150
+      limits_config:
+        retention_period: 48h
+      auth_enabled: false
+    singleBinary:
+      replicas: 1
+    persistence:
+      enabled: true
+      size: 40Gi
+    monitoring:
+      lokiCanary:
+        enabled: false
+      selfMonitoring:
+        enabled: false
+        grafanaAgent:
+          installOperator: false
+    gateway:
+      enabled: false
+    test:
+      enabled: false

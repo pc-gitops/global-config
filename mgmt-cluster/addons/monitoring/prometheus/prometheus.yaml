@@ -1,0 +1,164 @@
+---
+apiVersion: source.toolkit.fluxcd.io/v1beta2
+kind: HelmRepository
+metadata:
+  name: prometheus
+  namespace: monitoring
+spec:
+  interval: 1h0s
+  url: https://prometheus-community.github.io/helm-charts
+---
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: prometheus
+  namespace: monitoring
+spec:
+  chart:
+    spec:
+      chart: prometheus
+      version: 25.10.0
+      sourceRef:
+        kind: HelmRepository
+        name: prometheus
+  interval: 10m0s
+  install:
+    crds: CreateReplace
+    remediation:
+      retries: -1
+  upgrade:
+    crds: CreateReplace
+    remediation:
+      retries: -1
+  driftDetection:
+    mode: enabled
+    ignore:
+      # Ignore "validated" annotation which is not inserted during install
+      - paths: [ "/metadata/annotations/prometheus-operator-validated" ]
+        target:
+          kind: PrometheusRule
+  valuesFrom:
+  - kind: ConfigMap
+    name: flux-kube-state-metrics-config
+    valuesKey: kube-state-metrics-config.yaml
+  values:
+    exporter:
+      hostRootFsMount: false
+    defaultRules:
+      create: true
+      rules:
+        alertmanager: true
+        etcd: true
+        general: true
+        k8s: true
+        kubeApiserver: true
+        kubePrometheusNodeAlerting: true
+        kubePrometheusNodeRecording: true
+        kubernetesAbsent: true
+        kubernetesApps: true
+        kubernetesResources: true
+        kubernetesStorage: true
+        kubernetesSystem: true
+        kubeScheduler: true
+        network: true
+        node: true
+        prometheus: true
+        prometheusOperator: true
+        time: true
+
+      ## Labels for default rules
+      labels: {}
+      ## Annotations for default rules
+      annotations:
+        priority: 'high'
+
+    kubeControllerManager:
+      enabled: true
+      serviceMonitor:
+        https: false
+        insecureSkipVerify: true
+
+    kubelet:
+      enabled: true
+      serviceMonitor:
+        https: false
+
+    server:
+      statefulSet:
+        enabled: true
+      # podDisruptionBudget:
+      #   enabled: true
+      #   minAvailable: 1
+      ingress:
+        enabled: true
+        annotations:
+          kubernetes.io/ingress.class: nginx
+          cert-manager.io/cluster-issuer: local-ca-issuer
+          nginx.ingress.kubernetes.io/rewrite-target: /
+        tls:
+        - secretName: prometheus-tls
+          hosts:
+          - prometheus.${dnsSuffix}
+
+        hosts:
+        - prometheus.${dnsSuffix}
+
+        paths:
+        - /?(.*)
+
+      prometheusSpec:
+        externalUrl: 'https://prometheus.${dnsSuffix}/'
+        # routePrefix: '/prometheus'
+        retention: 24h
+        resources:
+          requests:
+            cpu: 200m
+            memory: 200Mi
+        podMonitorNamespaceSelector: {}
+        podMonitorSelector:
+          matchLabels:
+            app.kubernetes.io/component: monitoring
+
+      config:
+        global:
+          resolve_timeout: 5m
+        route:
+          group_by: ['job']
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 12h
+          receiver: 'cluster1'
+          routes:
+          - match:
+              alertname: 'CPUThrottlingHigh'
+            receiver: 'null'
+          - match:
+              alertname: 'KubeStatefulSetReplicasMismatch'
+            receiver: 'null'                 
+          - match:
+              alertname: Watchdog
+            receiver: 'null'
+          - match:
+              severity: 'critical'
+            receiver: 'null'
+          - match_re:
+              severity: '^(none|warning|critical)$'
+            receiver: 'null'
+  postRenderers:
+    - kustomize:
+        patches:
+          - target:
+              # Ignore these objects from Flux diff as they are mutated from chart hooks
+              kind: (ValidatingWebhookConfiguration|MutatingWebhookConfiguration)
+              name: kube-prometheus-stack-admission
+            patch: |
+              - op: add
+                path: /metadata/annotations/helm.toolkit.fluxcd.io~1driftDetection
+                value: disabled
+          - target:
+              # Ignore these objects from Flux diff as they are mutated at apply time but not at dry-run time
+              kind: PrometheusRule
+            patch: |
+              - op: add
+                path: /metadata/annotations/helm.toolkit.fluxcd.io~1driftDetection
+                value: disabled
